@@ -1,9 +1,11 @@
 import os
-API_KEY = os.getenv("OPENWEATHER_API_KEY")
-
 import requests
 import pandas as pd
 from datetime import datetime, timezone
+import hopsworks  # ✅ new import
+
+# --- API Key ---
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 LAT, LON = 24.8607, 67.0011  # Karachi
 
@@ -17,16 +19,13 @@ def get_realtime_data():
         pollution_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={LAT}&lon={LON}&appid={API_KEY}"
         pollution = requests.get(pollution_url, timeout=10).json()
 
-        # Validate structure
         if "main" not in weather or "list" not in pollution:
             raise ValueError("Invalid API response format")
 
-        # Extract weather
         temp = weather["main"]["temp"]
         humidity = weather["main"]["humidity"]
         wind_speed = weather["wind"]["speed"]
 
-        # Extract air quality
         air = pollution["list"][0]
         aqi = air["main"]["aqi"]
         comp = air["components"]
@@ -44,7 +43,6 @@ def get_realtime_data():
             "no2": comp.get("no2"),
             "so2": comp.get("so2"),
             "o3": comp.get("o3"),
-            # "nh3": comp.get("nh3")
         }
 
         return data
@@ -53,21 +51,30 @@ def get_realtime_data():
         print(f"⚠️ Error fetching data: {e}")
         return None
 
+
 data = get_realtime_data()
 if data:
     df = pd.DataFrame([data])
+    print(df)
+
+    # ✅ Save locally (optional)
     filename = "realtime_aqi_weather.csv"
-    # df.to_csv(filename, index=False)
     if os.path.exists(filename):
         df.to_csv(filename, mode='a', header=False, index=False)
     else:
         df.to_csv(filename, index=False)
-
     print(f"✅ Real-time data saved to {filename}")
+
+    # ✅ Push to Hopsworks
     try:
-        display(df)
-    except NameError:
-        print(df)
+        project = hopsworks.login(api_key_value=os.getenv("HOPSWORKS_API_KEY"))
+        fs = project.get_feature_store()
+
+        fg = fs.get_feature_group(name="raw_observations", version=2)
+        fg.insert(df)
+        print("✅ Data inserted into Hopsworks feature group 'raw_observations'")
+    except Exception as e:
+        print(f"⚠️ Could not insert into Hopsworks: {e}")
 
 else:
     print("❌ No data fetched.")
