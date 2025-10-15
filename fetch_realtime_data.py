@@ -32,12 +32,13 @@ def get_realtime_data():
 
         data = {
             "datetime": datetime.now(timezone.utc),
+            "datetime_str": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "city": "Karachi",
             "temp": temp,
             "humidity": humidity,
             "wind_speed": wind_speed,
             "aqi": aqi,
-            "pm25": comp.get("pm2_5"),
+            "pm2_5": comp.get("pm2_5"),
             "pm10": comp.get("pm10"),
             "co": comp.get("co"),
             "no2": comp.get("no2"),
