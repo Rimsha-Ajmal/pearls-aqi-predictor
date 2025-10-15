@@ -21,11 +21,15 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          pip install requests pandas hopsworks
+          pip install "hopsworks[python]==4.2.*" pyarrow pandas requests
 
       - name: Run real-time fetch script
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
-        run: python fetch_realtime_data.py
+        run: |
+          echo "🚀 Fetching real-time data..."
+          python fetch_realtime_data.py
+          echo "✅ Data fetch and upload completed successfully!"
