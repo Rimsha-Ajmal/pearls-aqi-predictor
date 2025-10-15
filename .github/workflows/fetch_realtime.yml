@@ -27,4 +27,5 @@ jobs:
       - name: Run real-time fetch script
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: python fetch_realtime_data.py
