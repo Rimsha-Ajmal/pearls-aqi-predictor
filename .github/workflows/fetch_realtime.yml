@@ -1,13 +1,13 @@
-name: Fetch Real-Time Data (Hourly)
+name: Real-Time Data Pipeline (Hourly)
 
 on:
   schedule:
     # Runs every hour
     - cron: "0 * * * *"
-  workflow_dispatch:  # allows manual triggering too
+  workflow_dispatch:  # allows manual triggering
 
 jobs:
-  fetch_data:
+  realtime_pipeline:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,14 +22,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || true
+          pip install -r requirements.txt
           pip install "hopsworks[python]==4.2.*" pyarrow pandas requests
 
-      - name: Run real-time fetch script
+      - name: Fetch data & compute features
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           echo "🚀 Fetching real-time data..."
           python fetch_realtime_data.py
-          echo "✅ Data fetch and upload completed successfully!"
+          echo "✅ Raw data fetch completed."
+
+          echo "⚡ Computing derived features..."
+          python compute_features_realtime.py
+          echo "✅ Features computed and stored in model_features FG."
