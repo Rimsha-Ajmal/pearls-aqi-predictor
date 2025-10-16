@@ -1,0 +1,4 @@
+hopsworks[python]==4.2.*
+pyarrow
+pandas
+requests
