@@ -1,104 +1,83 @@
-# -*- coding: utf-8 -*-
-"""
-fetch_realtime_data.py
-
-Fetch current AQI + weather readings from APIs, validate them,
-and insert into 'raw_observations' Feature Group in Hopsworks.
-"""
-
 import os
 import requests
 import pandas as pd
-import datetime as dt
+from datetime import datetime, timezone
 import hopsworks
 
-# -----------------------------
-# CONFIGURATION
-# -----------------------------
-AQI_API_URL = "https://api.waqi.info/feed/here/?token=" + os.environ.get("WAQI_TOKEN", "")
-WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
-LAT, LON = 24.8607, 67.0011  # Karachi (change if needed)
+# --- API Key ---
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
+LAT, LON = 24.8607, 67.0011  # Karachi
 
-# -----------------------------
-# FETCH FUNCTIONS
-# -----------------------------
-def fetch_aqi_data():
-    resp = requests.get(AQI_API_URL)
-    data = resp.json()
-    if "data" not in data or not isinstance(data["data"], dict):
-        raise ValueError("Invalid AQI API response")
-
-    iaqi = data["data"].get("iaqi", {})
-    aqi_value = data["data"].get("aqi", None)
-
-    return {
-        "aqi": aqi_value,
-        "pm2_5": iaqi.get("pm25", {}).get("v"),
-        "pm10": iaqi.get("pm10", {}).get("v"),
-        "co": iaqi.get("co", {}).get("v"),
-        "no2": iaqi.get("no2", {}).get("v"),
-        "so2": iaqi.get("so2", {}).get("v"),
-        "o3": iaqi.get("o3", {}).get("v"),
-    }
-
-
-def fetch_weather_data():
-    params = {
-        "latitude": LAT,
-        "longitude": LON,
-        "current_weather": True,
-    }
-    resp = requests.get(WEATHER_API_URL, params=params)
-    data = resp.json()
-    current = data.get("current_weather", {})
-    return {
-        "temp": current.get("temperature"),
-        "humidity": current.get("relativehumidity_2m"),
-        "wind_speed": current.get("windspeed"),
-    }
-
-
-# -----------------------------
-# MAIN
-# -----------------------------
-def main():
-    print("🚀 Fetching real-time data...")
-
-    # 1️⃣ Fetch data
-    aqi_data = fetch_aqi_data()
-    weather_data = fetch_weather_data()
-
-    combined = {**aqi_data, **weather_data}
-    combined["datetime"] = dt.datetime.now(dt.timezone.utc)
-    combined["datetime_str"] = combined["datetime"].strftime("%Y-%m-%d %H:%M:%S")
-
-    df = pd.DataFrame([combined])
-    print(df)
-
-    # 2️⃣ Save backup CSV
-    df.to_csv("realtime_aqi_weather.csv", index=False)
-    print("✅ Real-time data saved to realtime_aqi_weather.csv")
-
-    # 3️⃣ Connect to Hopsworks
-    project = hopsworks.login(api_key_value=os.environ.get("HOPSWORKS_API_KEY"))
-    fs = project.get_feature_store()
-    fg = fs.get_feature_group("raw_observations", version=2)
-
-    # 4️⃣ 🩹 Fix datatypes for Hopsworks schema
-    df["datetime"] = pd.to_datetime(df["datetime"])        # timestamp
-    df["humidity"] = pd.to_numeric(df["humidity"], errors="coerce").fillna(0).astype(int)
-    df["aqi"] = pd.to_numeric(df["aqi"], errors="coerce").fillna(0).astype(int)
-
-    # 5️⃣ Insert into feature group
+def get_realtime_data():
     try:
-        fg.insert(df)
-        print("✅ Real-time data inserted into raw_observations successfully!")
-    except Exception as e:
-        print(f"⚠️ Could not insert into Hopsworks: {e}")
+        # --- Fetch Weather Data ---
+        weather_url = f"http://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric"
+        weather = requests.get(weather_url, timeout=10).json()
 
-    print("✅ Raw data fetch completed.")
+        # --- Fetch Air Pollution Data ---
+        pollution_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={LAT}&lon={LON}&appid={API_KEY}"
+        pollution = requests.get(pollution_url, timeout=10).json()
+
+        if "main" not in weather or "list" not in pollution:
+            raise ValueError("Invalid API response format")
+
+        temp = weather["main"]["temp"]
+        humidity = weather["main"]["humidity"]
+        wind_speed = weather["wind"]["speed"]
+
+        air = pollution["list"][0]
+        aqi = air["main"]["aqi"]
+        comp = air["components"]
+
+        # --- Store as floats to ensure consistent schema ---
+        data = {
+            "datetime": datetime.now(timezone.utc),
+            "datetime_str": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "city": "Karachi",
+            "temp": float(temp),
+            "humidity": float(humidity),
+            "wind_speed": float(wind_speed),
+            "aqi": float(aqi),
+            "pm2_5": float(comp.get("pm2_5", 0)),
+            "pm10": float(comp.get("pm10", 0)),
+            "co": float(comp.get("co", 0)),
+            "no2": float(comp.get("no2", 0)),
+            "so2": float(comp.get("so2", 0)),
+            "o3": float(comp.get("o3", 0)),
+        }
+
+        return data
+
+    except Exception as e:
+        print(f"⚠️ Error fetching data: {e}")
+        return None
 
 
 if __name__ == "__main__":
-    main()
+    data = get_realtime_data()
+    if data:
+        df = pd.DataFrame([data])
+        print(df)
+
+        # ✅ Save locally (optional)
+        filename = "realtime_aqi_weather.csv"
+        if os.path.exists(filename):
+            df.to_csv(filename, mode="a", header=False, index=False)
+        else:
+            df.to_csv(filename, index=False)
+        print(f"✅ Real-time data saved to {filename}")
+
+        # ✅ Push to Hopsworks
+        try:
+            project = hopsworks.login(api_key_value=os.getenv("HOPSWORKS_API_KEY"))
+            fs = project.get_feature_store()
+
+            fg = fs.get_feature_group(name="raw_observations", version=2)
+            fg.insert(df)
+            print("✅ Data inserted into Hopsworks feature group 'raw_observations'")
+        except Exception as e:
+            print(f"⚠️ Could not insert into Hopsworks: {e}")
+
+    else:
+        print("❌ No data fetched.")
