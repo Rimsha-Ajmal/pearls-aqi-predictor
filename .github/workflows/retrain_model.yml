@@ -1,0 +1,41 @@
+name: Daily AQI Model Retraining
+
+on:
+  schedule:
+    # Run daily at 09:00 AM UTC 
+    - cron: "0 9 * * *"
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Set up Python
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install hopsworks hsml scikit-learn pandas numpy joblib
+
+      # 4️⃣ Set environment variables
+      - name: Set environment variables
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: echo "Environment variables configured."
+
+      # 5️⃣ Run retraining script
+      - name: Run incremental retraining
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: |
+          python retrain_model.py
