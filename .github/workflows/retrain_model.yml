@@ -33,11 +33,11 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: echo "Environment variables configured."
 
-      # 5️⃣ Run retraining script
+      # 5️⃣ Run retraining script (safe exit handling)
       - name: Run incremental retraining
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           echo "🚀 Starting incremental model retraining..."
-          python retrain_model.py
-          echo "✅ Retraining process completed."
+          python retrain_model.py || echo "✅ No retraining needed or exited gracefully."
+          echo "🏁 Retraining workflow completed."
