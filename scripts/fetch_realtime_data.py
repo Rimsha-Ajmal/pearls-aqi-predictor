@@ -30,15 +30,15 @@ def get_realtime_data():
         aqi = air["main"]["aqi"]
         comp = air["components"]
 
-        # --- Store as floats to ensure consistent schema ---
+        # --- Store as floats first ---
         data = {
             "datetime": datetime.now(timezone.utc),
             "datetime_str": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "city": "Karachi",
             "temp": float(temp),
-            "humidity": float(humidity),
+            "humidity": float(humidity),   # will convert to int before insert
             "wind_speed": float(wind_speed),
-            "aqi": float(aqi),
+            "aqi": float(aqi),             # will convert to int before insert
             "pm2_5": float(comp.get("pm2_5", 0)),
             "pm10": float(comp.get("pm10", 0)),
             "co": float(comp.get("co", 0)),
@@ -67,6 +67,10 @@ if __name__ == "__main__":
         else:
             df.to_csv(filename, index=False)
         print(f"✅ Real-time data saved to {filename}")
+
+        # ✅ Convert columns to match Hopsworks schema
+        df['aqi'] = df['aqi'].round().astype(int)
+        df['humidity'] = df['humidity'].round().astype(int)
 
         # ✅ Push to Hopsworks
         try:

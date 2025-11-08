@@ -2,3 +2,8 @@ hopsworks[python]==4.2.*
 pyarrow
 pandas
 requests
+matplotlib
+scikit-learn
+shap
+joblib
+

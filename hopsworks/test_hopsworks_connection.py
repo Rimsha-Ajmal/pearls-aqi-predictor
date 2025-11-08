@@ -18,7 +18,7 @@ try:
     print("✅ Feature Store connected:", fs.name)
 
     # Since your API requires explicit names:
-    feature_groups_to_check = ["model_features", "raw_observations"]
+    feature_groups_to_check = ["model_features", "raw_observations", "aqi_forecast_72h"]
     found_feature_groups = []
 
     for fg_name in feature_groups_to_check:
