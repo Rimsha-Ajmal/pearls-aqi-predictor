@@ -31,9 +31,9 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           echo "🚀 Fetching real-time data..."
-          python fetch_realtime_data.py
+          python scripts/fetch_realtime_data.py
           echo "✅ Raw data fetch completed."
 
           echo "⚡ Computing derived features..."
-          python compute_features_realtime.py
+          python scripts/compute_features_realtime.py
           echo "✅ Features computed and stored in model_features FG."
