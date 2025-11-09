@@ -1,9 +1,24 @@
-hopsworks[python]==4.2.*
-pyarrow
+# Core dependencies
+python-dotenv
 pandas
+numpy
+pyarrow
 requests
 matplotlib
-scikit-learn
+plotly
 shap
 joblib
+scikit-learn
+
+# Streamlit app
+streamlit
+altair
+
+# Hopsworks & Feature Store
+hopsworks[python]==4.2.*
+
+# Utilities & JSON handling
+tqdm
+
+
 

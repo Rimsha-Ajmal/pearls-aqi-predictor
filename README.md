@@ -36,3 +36,21 @@ Predict the Air Quality Index (AQI) for the next 3 days using real-time and hist
 You can download the project report here:
 
 [📄 Pearls AQI Predictor Report (Word)](Pearls_AQI_Predictor_Report.docx)
+
+## 🚀 How to Run the Project
+
+Follow these steps to set up and run the project locally:
+
+1. **Create and activate a virtual environment**
+   python -m venv test_env
+   test_env\Scripts\activate      # On Windows
+   # or
+   source test_env/bin/activate   # On macOS/Linux
+
+2. **Install the dependencies**
+   pip install -r requirements.txt
+
+3. **Run the Streamlit app**
+   streamlit run app.py
+
+
