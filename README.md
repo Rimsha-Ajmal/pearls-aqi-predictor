@@ -42,9 +42,6 @@ You can download the project report here:
 Follow these steps to set up and run the project locally:
 
 1. python -m venv test_env
-test_env\Scripts\activate      # On Windows
-# or
-source test_env/bin/activate   # On macOS/Linux
 
 2. pip install -r requirements.txt
 
