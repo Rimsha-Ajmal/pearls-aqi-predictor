@@ -29,10 +29,13 @@ def show_local_fallback():
 
 # ---------- Streamlit App ----------
 def app():
-    st.title("🤖 Train AQI Prediction Models")
-    st.write("Train multiple models, compare their performance, and automatically select the best one.")
+    # ----- Page Header -----
+    st.markdown("<h1 style='text-align: center; color: #4B0082;'>🤖 Train AQI Prediction Models</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #555;'>Train, compare, and select the best AQI prediction model</h4>", unsafe_allow_html=True)
+    st.markdown("---")
 
-    # ------------------- Load latest features ------------------- #
+    # ----- Load latest features -----
+    st.markdown("<h2 style='color:#4B0082;'>📋 Computed Features Snapshot</h2>", unsafe_allow_html=True)
     local_cache = "data/recent_snapshot.csv"
     try:
         project, fs = connect_hopsworks()
@@ -57,27 +60,53 @@ def app():
             df_features = None  # fallback
 
     if df_features is not None:
-        st.subheader("📋 Computed Features")
         st.dataframe(df_features, width='stretch')
 
-    st.divider()
-    st.header("📊 Latest Training Results")
+    st.markdown("---")
+    st.markdown("<h2 style='color:#4B0082;'>📊 Latest Training Results</h2>", unsafe_allow_html=True)
 
+    # ----- Load all metrics -----
     all_metrics = load_all_metrics()
     if all_metrics:
         df_metrics = pd.DataFrame(all_metrics)
         df_metrics = df_metrics.sort_values("R2", ascending=False).reset_index(drop=True)
 
+        # Display metrics in card-style layout
         st.markdown("### 🚀 Model Comparison:")
-        st.dataframe(df_metrics, width='stretch')
+        col_count = 3  # display metrics in 3-column cards
+        rows = (len(df_metrics) + col_count - 1) // col_count
+
+        for i in range(rows):
+            cols = st.columns(col_count, gap="medium")
+            for j in range(col_count):
+                idx = i * col_count + j
+                if idx < len(df_metrics):
+                    model = df_metrics.iloc[idx]
+                    card_style = """
+                        background-color: #f0f4f8; 
+                        padding: 20px; 
+                        border-radius: 10px;
+                        text-align: center;
+                        margin-bottom: 10px;
+                    """
+                    cols[j].markdown(f"""
+                        <div style="{card_style}">
+                            <h4>🏷️ {model['Model']}</h4>
+                            <p>📈 MAE: {model['MAE']:.3f}</p>
+                            <p>📉 RMSE: {model['RMSE']:.3f}</p>
+                            <p>💯 R²: {model['R2']:.3f}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
 
         best_model = df_metrics.iloc[0]
+        st.markdown("---")
         st.markdown(
             f"🏆 **Best Model:** `{best_model['Model']}`\n\n"
             f"📈 **Metrics** → MAE: `{best_model['MAE']:.3f}`, "
             f"RMSE: `{best_model['RMSE']:.3f}`, "
             f"R²: `{best_model['R2']:.3f}`"
         )
+
     else:
         st.warning("⚠️ No metrics found. Run training first or load offline results.")
         show_local_fallback()

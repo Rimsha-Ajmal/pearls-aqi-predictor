@@ -17,9 +17,7 @@ os.makedirs("models", exist_ok=True)
 
 # ---------- Helper Functions ----------
 def load_model_from_registry(model_name="randomForest_shap_30_model", local_path=MODEL_PATH):
-    """Load model from local path or Hopsworks model registry."""
     if os.path.exists(local_path):
-        st.success("✅ Loaded local model successfully.")
         return joblib.load(local_path)
 
     st.info("🔍 Local model not found — attempting to fetch from Hopsworks...")
@@ -31,7 +29,7 @@ def load_model_from_registry(model_name="randomForest_shap_30_model", local_path
             st.error(f"❌ No model named '{model_name}' found in registry.")
             return None
 
-        latest_model = model_versions[-1]
+        latest_model = sorted(model_versions, key=lambda m: m.version, reverse=True)[0]
         model_dir = latest_model.download()
 
         found_file = None
@@ -55,52 +53,27 @@ def load_model_from_registry(model_name="randomForest_shap_30_model", local_path
         st.error(f"❌ Could not load model from Hopsworks: {e}")
         return None
 
-def load_model_metrics(from_hopsworks=False):
-    """Load metrics from Hopsworks or local cache."""
-    metrics = {}
-    if from_hopsworks:
-        try:
-            project, _ = connect_hopsworks()
-            mr = project.get_model_registry()
-            models = mr.get_models(name="randomForest_shap_30_model")
-            if not models:
-                raise Exception("No models found in registry.")
 
-            latest = sorted(models, key=lambda m: m.version, reverse=True)[0]
-            details = latest.get_model()
-
-            metrics = {
-                "Model Name": latest.name,
-                "Version": latest.version,
-                **details.get("metrics", {})
-            }
-
-            with open(METRICS_PATH, "w") as f:
-                json.dump(metrics, f, indent=2)
-
-            st.success(f"✅ Loaded latest model metrics: {latest.name} (v{latest.version})")
-            return metrics
-
-        except Exception as e:
-            st.warning(f"⚠️ Could not fetch from Hopsworks: {e}")
-
+def load_model_metrics():
+    """Load locally saved model metrics."""
     if os.path.exists(METRICS_PATH):
         with open(METRICS_PATH, "r") as f:
-            metrics = json.load(f)
-        return metrics
+            return json.load(f)
+    else:
+        st.info("ℹ️ No local metrics found. Run retraining workflow to generate metrics.")
+        return None
 
-    st.error("❌ No model information found.")
-    return None
 
 def load_shap_json(path=SHAP_JSON_PATH):
-    """Load SHAP feature importance from JSON if exists."""
+    """Load SHAP feature importance JSON."""
     if os.path.exists(path):
         with open(path, "r") as f:
             return json.load(f)
     return None
 
+
 def compute_shap_from_feature_group(model_path=MODEL_PATH, fg_name="computed_features_historical", fg_version=1):
-    """Fetch Feature Group, download model if needed, compute SHAP values, save JSON."""
+    """Compute SHAP values if no cached data found."""
     try:
         project, fs = connect_hopsworks()
         fg = fs.get_feature_group(name=fg_name, version=fg_version)
@@ -133,32 +106,29 @@ def compute_shap_from_feature_group(model_path=MODEL_PATH, fg_name="computed_fea
 
     return shap_df
 
+
 # ---------- Streamlit App ----------
 def app():
-    st.title("🧠 Model Insights & Performance")
-
-    # --- Refresh button ---
-    col1, col2 = st.columns([0.5, 0.5])
-    with col1:
-        if st.button("🔄 Refresh from Hopsworks"):
-            with st.spinner("Fetching model details..."):
-                metrics = load_model_metrics(from_hopsworks=True)
-                if metrics:
-                    st.rerun()
-                else:
-                    st.error("❌ Could not refresh model info.")
-                    return
-    with col2:
-        st.caption("Local cache loads instantly when offline.")
+    st.markdown(
+        """
+        <h1 style='text-align:center; color:#4B0082;'>🧠 Model Insights & Performance</h1>
+        <h4 style='text-align:center; color:#666;'>View metrics and SHAP feature importance for your AQI model</h4>
+        <hr style='border: 1px solid #ccc; margin:10px 0;'>
+        """,
+        unsafe_allow_html=True
+    )
 
     # --- Load metrics ---
     metrics = load_model_metrics()
     if metrics:
-        st.subheader("📊 Model Performance Metrics")
-        st.table(pd.DataFrame([metrics]))
+        st.markdown("<h2 style='color:#4B0082;'>📊 Model Performance Metrics</h2>", unsafe_allow_html=True)
+        metrics_df = pd.DataFrame(metrics.items(), columns=["Metric", "Value"])
+        st.table(metrics_df)
+    else:
+        st.info("ℹ️ No metrics available yet. Ensure metrics file is generated during model training.")
 
     # --- SHAP feature importance ---
-    st.subheader("🧩 SHAP Feature Importance")
+    st.markdown("<h2 style='color:#4B0082;'>🧩 SHAP Feature Importance</h2>", unsafe_allow_html=True)
     shap_dict = load_shap_json()
     if shap_dict:
         shap_df = pd.DataFrame(list(shap_dict.items()), columns=["Feature", "Mean |SHAP|"])
@@ -168,11 +138,24 @@ def app():
             shap_df = compute_shap_from_feature_group()
 
     if shap_df is not None:
-        st.table(shap_df)
-        fig = px.bar(shap_df, x="Feature", y="Mean |SHAP|", title="SHAP Feature Importance")
-        st.plotly_chart(fig, width="stretch")
+        st.dataframe(shap_df.style.background_gradient(cmap='Purples', subset=["Mean |SHAP|"]))
+        fig = px.bar(
+            shap_df,
+            x="Feature",
+            y="Mean |SHAP|",
+            title="SHAP Feature Importance",
+            color="Mean |SHAP|",
+            color_continuous_scale="Purples"
+        )
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            title_font_color="#4B0082",
+        )
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("ℹ️ SHAP values cannot be computed. Ensure model & feature group exist.")
+
 
 # Run app
 if __name__ == "__main__":

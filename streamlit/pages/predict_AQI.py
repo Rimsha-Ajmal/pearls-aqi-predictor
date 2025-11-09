@@ -64,7 +64,10 @@ def aqi_alert(aqi_class):
 
 # ------------------------- MAIN APP ------------------------- #
 def app():
-    st.title("🌫️ AQI Forecast (Next 3 Days)")
+    # ----- Page Header -----
+    st.markdown("<h1 style='text-align: center; color: #4B0082; font-size:40px;'>🌫️ AQI Forecast</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #555; font-size:20px;'>Predict the Air Quality Index for the next 3 days</h4>", unsafe_allow_html=True)
+    st.markdown("---")
 
     os.makedirs("data", exist_ok=True)
     local_cache = "data/realtime_snapshot.csv"
@@ -92,9 +95,29 @@ def app():
             st.error("❌ No cached data found. Please push computed_features_realtime first.")
             return
 
-    # ✅ Display last 10 rows
-    st.subheader("📊 Recent Real-time Computed Features")
-    st.dataframe(df, width='stretch')
+    # ----- Recent Features Table with scrollbar and smaller font -----
+    st.markdown("<h2 style='color:#4B0082; font-size:28px;'>📊 Recent Real-time Computed Features</h2>", unsafe_allow_html=True)
+    
+    # Make table horizontally scrollable
+    st.markdown(
+        f"""
+        <div style="overflow-x:auto;">
+            {df.to_html(index=False)}
+        </div>
+        <style>
+            table {{
+                font-size: 14px;
+                border-collapse: collapse;
+                width: 100%;
+            }}
+            th, td {{
+                padding: 4px 6px !important;
+                text-align: center;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ------------------- Load model ------------------- #
     model = load_model()
@@ -105,7 +128,6 @@ def app():
 
     try:
         model_features = list(model.feature_names_in_)
-        # st.write("🧩 Model expects:", model_features)
 
         # Add missing columns with default 0
         for col in model_features:
@@ -119,7 +141,7 @@ def app():
         st.warning(f"⚠️ Could not align features automatically: {e}")
 
     # ------------------- Predict AQI ------------------- #
-    if st.button("🚀 Predict AQI (Next 3 Days)", width='stretch'):
+    if st.button("🚀 Predict AQI (Next 3 Days)"):
         st.info("⏳ Generating forecast...")
         try:
             preds = model.predict(feature_input)
@@ -137,24 +159,28 @@ def app():
             "Alert": [aqi_alert(p)[1] for p in preds]
         })
 
+        # ----- Forecast Results (unchanged) -----
         st.success("✅ Forecast Ready!")
-        st.dataframe(results, width='stretch')
+        st.markdown("<h2 style='color:#4B0082; font-size:28px;'>📋 Forecast Results</h2>", unsafe_allow_html=True)
+        st.markdown(f"<div style='padding:10px'>{results.to_html(index=False)}</div>", unsafe_allow_html=True)
 
+        # ----- Forecast Chart -----
         fig = px.line(
             results,
             x="Date",
             y="Predicted AQI Class",
             markers=True,
-            title="🌥️ Predicted AQI Trend (Next 3 Days)"
+            title="🌥️ Predicted AQI Trend (Next 3 Days)",
+            template="plotly_white"
         )
+        fig.update_layout(title_font_color="#4B0082", xaxis_title="Date", yaxis_title="AQI Class")
         st.plotly_chart(fig, width='stretch')
 
-        st.subheader("⚠️ Air Quality Alerts")
+        # ----- Air Quality Alerts -----
+        st.markdown("<h3 style='color:#4B0082; font-size:24px;'>⚠️ Air Quality Alerts</h3>", unsafe_allow_html=True)
         for _, row in results.iterrows():
             st.info(f"**{row['Date']} → {row['Condition']}** ({row['Alert']})")
 
 # ------------------------- RUN APP ------------------------- #
 if __name__ == "__main__":
     app()
-
-

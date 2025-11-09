@@ -1,6 +1,4 @@
 {
-    "Best Model": "randomForest_shap_30_model",
-    "MAE": 0.0598,
-    "RMSE": 0.1131,
-    "R2": 0.9897
+  "Model": "randomForest_shap_30_model",
+  "Version": 1
 }
