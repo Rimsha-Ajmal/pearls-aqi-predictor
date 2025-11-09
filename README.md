@@ -30,3 +30,9 @@ Predict the Air Quality Index (AQI) for the next 3 days using real-time and hist
 **Future Improvements:**  
 - Replace AQI 1–5 scale with exact numeric values.  
 - Explore advanced/deep learning models for better forecasting.
+
+### Project Report
+
+You can download the project report here:
+
+[📄 Pearls AQI Predictor Report (Word)](Pearls_AQI_Predictor_Report.docx)
