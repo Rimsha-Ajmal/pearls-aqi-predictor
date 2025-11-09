@@ -37,7 +37,7 @@ You can download the project report here:
 
 [📄 Pearls AQI Predictor Report (Word)](Pearls_AQI_Predictor_Report.docx)
 
-## 🚀 How to Run the Project
+### How to Run the Project
 
 Follow these steps to set up and run the project locally:
 
