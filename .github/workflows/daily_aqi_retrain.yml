@@ -34,7 +34,7 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           echo "🚀 Starting incremental retraining..."
-          python scripts/aqi_retrain.py || echo "✅ No retraining needed or exited gracefully."
+          python scripts/retrain_model.py || echo "✅ No retraining needed or exited gracefully."
 
       # 5️⃣ Commit & push updated checkpoint
       - name: Commit updated checkpoint
