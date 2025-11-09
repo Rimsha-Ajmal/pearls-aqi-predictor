@@ -105,7 +105,7 @@ def app():
 
     try:
         model_features = list(model.feature_names_in_)
-        st.write("🧩 Model expects:", model_features)
+        # st.write("🧩 Model expects:", model_features)
 
         # Add missing columns with default 0
         for col in model_features:

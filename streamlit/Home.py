@@ -55,9 +55,8 @@ if page == "🏠 Home":
     """)
 
     st.image(
-        "https://images.unsplash.com/photo-1504610926078-a1611febcad3?w=1400",
+        "assets/air-quality-index.webp",
         caption="Smarter Air Quality Awareness for a Healthier City",
-        # width="auto"
     )
 
 elif page == "📈 Model Insights":
