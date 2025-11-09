@@ -1,12 +1,12 @@
 # ========================================================== 
-# AQI Model Incremental Retraining Script (Final Clean Version)
+# AQI Model Incremental Retraining Script (Hopsworks Checkpoint Version)
 # ==========================================================
 
 import os
 import joblib
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
+from datetime import timezone
 import hopsworks
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -36,13 +36,21 @@ df_all = pd.concat([df_hist, df_realtime]).drop_duplicates(subset=["datetime"])
 df_all = df_all.sort_values("datetime").reset_index(drop=True)
 print(f"✅ Combined feature data shape: {df_all.shape}")
 
-# ------------------------------ 3️⃣ Load or initialize checkpoint ------------------------------
-checkpoint_file = "last_datetime.txt"
-if os.path.exists(checkpoint_file):
-    with open(checkpoint_file, "r") as f:
-        last_dt = pd.to_datetime(f.read().strip(), utc=True)
-    print(f"ℹ️ Last checkpoint: {last_dt}")
-else:
+# ------------------------------ 3️⃣ Load or initialize checkpoint from Hopsworks ------------------------------
+checkpoint_fg = fs.get_or_create_feature_group(
+    name="retraining_checkpoint",
+    version=1,
+    primary_key=["pipeline_name"],
+    description="Tracks last processed datetime for AQI retraining"
+)
+
+try:
+    df_checkpoint = checkpoint_fg.read()
+    last_dt = pd.to_datetime(
+        df_checkpoint.loc[df_checkpoint.pipeline_name=="aqi_model", "last_datetime"].values[0], utc=True
+    )
+    print(f"ℹ️ Last checkpoint from Hopsworks: {last_dt}")
+except Exception:
     last_dt = pd.Timestamp.min.replace(tzinfo=timezone.utc)
     print("ℹ️ No checkpoint found — starting fresh (min timestamp UTC).")
 
@@ -58,10 +66,7 @@ else:
     target_col = f"aqi_t_plus_{H}"
     non_feature_cols = ["datetime", "timestamp"]
 
-    # Remove invalid or missing target rows
     df_sup = df_new.dropna(subset=[target_col]).copy()
-
-    # Select only feature columns
     features = [c for c in df_sup.columns if c not in non_feature_cols + [target_col]]
 
     X = df_sup[features].replace([np.inf, -np.inf], np.nan)
@@ -69,11 +74,9 @@ else:
     X = X.ffill().dropna()
     y = df_sup.loc[X.index, target_col].astype(float)
 
-    # Ensure we have enough samples
     if len(X) < 100:
         print("⚠️ Not enough new data for retraining. ✅ Pipeline ran successfully.")
     else:
-        # Time-based split for validation
         split_frac = 0.8
         split_idx = int(len(X) * split_frac)
         X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
@@ -145,9 +148,9 @@ else:
             model.save(model_path)
             print("✅ Registered new model version in Hopsworks.")
 
-        # ------------------------------ 9️⃣ Update checkpoint ------------------------------
+        # ------------------------------ 9️⃣ Update checkpoint in Hopsworks ------------------------------
         new_last_dt = df_all["datetime"].max()
-        with open(checkpoint_file, "w") as f:
-            f.write(str(new_last_dt))
-        print(f"🔖 Checkpoint updated → {new_last_dt}")
+        checkpoint_df = pd.DataFrame([{"pipeline_name": "aqi_model", "last_datetime": new_last_dt}])
+        checkpoint_fg.insert(checkpoint_df, write_options={"upsert": True})
+        print(f"🔖 Checkpoint updated in Hopsworks → {new_last_dt}")
         print("🎯 Pipeline completed successfully.")
