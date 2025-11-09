@@ -13,7 +13,7 @@ st.set_page_config(
 st.sidebar.title("🌫️ Pearls AQI Predictor")
 st.sidebar.caption("Real-time AQI tracking & ML forecasting")
 
-st.write("ENV OK:", os.getenv("PROJECT_NAME"))
+# st.write("ENV OK:", os.getenv("PROJECT_NAME"))
 
 # Hopsworks Connect
 if st.sidebar.button("🔌 Connect to Hopsworks"):

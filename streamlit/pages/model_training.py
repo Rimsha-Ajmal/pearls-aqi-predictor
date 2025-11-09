@@ -1,97 +1,87 @@
 import streamlit as st
 import pandas as pd
-import subprocess
 import os
 import json
-import time
+from dotenv import load_dotenv
+from utils.hops import connect_hopsworks
+
+load_dotenv()  # ensure env vars available if needed
 
 # ---------- Paths ----------
 ALL_METRICS_PATH = "models/all_models_metrics.json"
 LAST_LOG_PATH = "models/last_training_log.txt"
 os.makedirs("models", exist_ok=True)
+os.makedirs("data", exist_ok=True)
 
 # ---------- Helper Functions ----------
-def run_training_script():
-    """Runs the training script and streams logs live in Streamlit."""
-    cmd = ["python", "scripts/train_model.py"]
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    log_box = st.empty()
-    logs = ""
-
-    while True:
-        output = process.stdout.readline()
-        if output:
-            logs += output
-            log_box.code(logs, language="bash")
-        if process.poll() is not None:
-            break
-        time.sleep(0.05)
-
-    with open(LAST_LOG_PATH, "w", encoding="utf-8") as f:
-        f.write(logs)
-
-    return process.returncode, logs
-
-
 def load_all_metrics():
-    """Load all model metrics from local file."""
     if os.path.exists(ALL_METRICS_PATH):
         with open(ALL_METRICS_PATH, "r") as f:
             return json.load(f)
     return []
 
-
 def show_local_fallback():
-    """Show fallback message when working offline or training fails."""
     if os.path.exists(LAST_LOG_PATH):
         with open(LAST_LOG_PATH, "r", encoding="utf-8") as f:
             logs = f.read()
         st.warning("⚠️ Showing locally saved training results (offline mode).")
         st.code(logs, language="bash")
 
-
 # ---------- Streamlit App ----------
 def app():
     st.title("🤖 Train AQI Prediction Models")
     st.write("Train multiple models, compare their performance, and automatically select the best one.")
 
-    # --- Training button ---
-    if st.button("🟩 Start Training"):
-        with st.spinner("⏳ Training models..."):
-            returncode, logs = run_training_script()
+    # ------------------- Load latest features ------------------- #
+    local_cache = "data/recent_snapshot.csv"
+    try:
+        project, fs = connect_hopsworks()
+        fg = fs.get_feature_group("computed_features_historical", version=1)
 
-        if returncode == 0:
-            st.success("✅ Training completed successfully!")
-            st.code(logs, language="bash")
+        df_features = fg.read()
+        if df_features is None or df_features.empty:
+            raise ValueError("Feature group returned empty or None.")
+
+        df_features = df_features.sort_values("datetime").tail(10)
+        df_features.to_csv(local_cache, index=False)
+        st.success("✅ Loaded recent observation snapshot from Hopsworks.")
+
+    except Exception as e:
+        st.warning(f"⚠️ Could not fetch data from Hopsworks: {e}")
+
+        if os.path.exists(local_cache):
+            df_features = pd.read_csv(local_cache)
+            st.info("📁 Loaded cached snapshot from previous run.")
         else:
-            st.error("❌ Training failed. Showing last saved results instead.")
-            show_local_fallback()
+            st.error("❌ No cached data found. Please connect once to Hopsworks to cache it.")
+            df_features = None  # fallback
 
-        st.rerun()
+    if df_features is not None:
+        st.subheader("📋 Computed Features")
+        st.dataframe(df_features, width='stretch')
 
     st.divider()
     st.header("📊 Latest Training Results")
 
-    # --- Load all models metrics ---
     all_metrics = load_all_metrics()
     if all_metrics:
-        df = pd.DataFrame(all_metrics)
-        # Sort by best R²
-        df = df.sort_values("R2", ascending=False).reset_index(drop=True)
+        df_metrics = pd.DataFrame(all_metrics)
+        df_metrics = df_metrics.sort_values("R2", ascending=False).reset_index(drop=True)
 
-        # Display comparison table
         st.markdown("### 🚀 Model Comparison:")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df_metrics, width='stretch')
 
-        # Highlight best model
-        best_model = df.iloc[0]
+        best_model = df_metrics.iloc[0]
         st.markdown(
             f"🏆 **Best Model:** `{best_model['Model']}`\n\n"
-            f"📈 **Metrics** → MAE: `{best_model['MAE']:.2f}`, "
-            f"RMSE: `{best_model['RMSE']:.2f}`, "
+            f"📈 **Metrics** → MAE: `{best_model['MAE']:.3f}`, "
+            f"RMSE: `{best_model['RMSE']:.3f}`, "
             f"R²: `{best_model['R2']:.3f}`"
         )
-
     else:
         st.warning("⚠️ No metrics found. Run training first or load offline results.")
         show_local_fallback()
+
+
+if __name__ == "__main__":
+    app()
