@@ -13,8 +13,6 @@ jobs:
       # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true  # needed to push changes
 
       # 2️⃣ Set up Python
       - name: Set up Python 3.10
@@ -34,17 +32,9 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           echo "🚀 Starting incremental retraining..."
-          python scripts/retrain_model.py || echo "✅ No retraining needed or exited gracefully."
-
-      # 5️⃣ Commit & push updated checkpoint
-      - name: Commit updated checkpoint
-        run: |
-          if git diff --quiet; then
-            echo "📄 No changes to commit."
+          set -e
+          if python scripts/retrain_model.py; then
+            echo "✅ Retraining completed successfully."
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add last_datetime.txt
-            git commit -m "Update AQI retraining checkpoint [skip ci]"
-            git push
-            echo "✅ Updated checkpoint committed and pushed."
+            echo "⚠️ No retraining needed or script exited gracefully."
+          fi
