@@ -37,31 +37,35 @@ df_all = df_all.sort_values("datetime").reset_index(drop=True)
 print(f"✅ Combined feature data shape: {df_all.shape}")
 
 # ------------------------------ 3️⃣ Load or initialize checkpoint from Hopsworks ------------------------------
-checkpoint_fg = fs.get_or_create_feature_group(
-    name="retraining_checkpoint",
-    version=1,
-    primary_key=["pipeline_name"],
-    description="Tracks last processed datetime for AQI retraining"
-)
+checkpoint_fg_name = "retraining_checkpoint"
 
 try:
+    checkpoint_fg = fs.get_feature_group(name=checkpoint_fg_name, version=1)
     df_checkpoint = checkpoint_fg.read()
     last_dt = pd.to_datetime(
         df_checkpoint.loc[df_checkpoint.pipeline_name=="aqi_model", "last_datetime"].values[0], utc=True
     )
     print(f"ℹ️ Last checkpoint from Hopsworks: {last_dt}")
 except Exception:
+    # Feature group doesn't exist, create it
+    checkpoint_fg = fs.create_feature_group(
+        name=checkpoint_fg_name,
+        version=1,
+        primary_key=["pipeline_name"],
+        description="Tracks last processed datetime for AQI retraining",
+        online_enabled=False
+    )
     last_dt = pd.Timestamp.min.replace(tzinfo=timezone.utc)
     print("ℹ️ No checkpoint found — starting fresh (min timestamp UTC).")
 
-# Filter for new data only
+# ------------------------------ 4️⃣ Filter for new data ------------------------------
 df_new = df_all[df_all["datetime"] > last_dt].copy()
 if df_new.empty:
     print("🚫 No new data to retrain. ✅ Pipeline ran successfully.")
 else:
     print(f"✅ Found {df_new.shape[0]} new rows for retraining.")
 
-    # ------------------------------ 4️⃣ Prepare supervised dataset ------------------------------
+    # ------------------------------ 5️⃣ Prepare supervised dataset ------------------------------
     H = 72
     target_col = f"aqi_t_plus_{H}"
     non_feature_cols = ["datetime", "timestamp"]
@@ -84,7 +88,7 @@ else:
 
         print(f"✅ Data ready | Train: {len(X_train)}, Val: {len(X_val)}")
 
-        # ------------------------------ 5️⃣ Load existing model ------------------------------
+        # ------------------------------ 6️⃣ Load existing model ------------------------------
         model_name = "randomForest_shap_30_model"
         existing_model = None
         try:
@@ -97,12 +101,12 @@ else:
         except Exception:
             print("ℹ️ No existing model found — will register first version.")
 
-        # ------------------------------ 6️⃣ Train new RandomForest ------------------------------
+        # ------------------------------ 7️⃣ Train new RandomForest ------------------------------
         rf = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
         rf.fit(X_train, y_train)
         print("✅ Model retrained successfully.")
 
-        # ------------------------------ 7️⃣ Evaluate ------------------------------
+        # ------------------------------ 8️⃣ Evaluate ------------------------------
         def get_metrics(y_true, y_pred):
             mae = mean_absolute_error(y_true, y_pred)
             rmse = np.sqrt(mean_squared_error(y_true, y_pred))
@@ -113,7 +117,7 @@ else:
         mae, rmse, r2 = get_metrics(y_val, y_pred)
         print(f"📈 Validation -> MAE: {mae:.4f}, RMSE: {rmse:.4f}, R²: {r2:.4f}")
 
-        # ------------------------------ 8️⃣ Compare & Register ------------------------------
+        # ------------------------------ 9️⃣ Compare & Register ------------------------------
         better = False
         if existing_model:
             improved_count = sum([
@@ -148,9 +152,15 @@ else:
             model.save(model_path)
             print("✅ Registered new model version in Hopsworks.")
 
-        # ------------------------------ 9️⃣ Update checkpoint in Hopsworks ------------------------------
+        # ------------------------------ 🔟 Update checkpoint in Hopsworks & save locally ------------------------------
         new_last_dt = df_all["datetime"].max()
         checkpoint_df = pd.DataFrame([{"pipeline_name": "aqi_model", "last_datetime": new_last_dt}])
         checkpoint_fg.insert(checkpoint_df, write_options={"upsert": True})
         print(f"🔖 Checkpoint updated in Hopsworks → {new_last_dt}")
+
+        # Save local checkpoint for development/testing
+        with open("last_datetime_local.txt", "w") as f:
+            f.write(str(new_last_dt))
+        print(f"💾 Local checkpoint saved → last_datetime_local.txt")
+
         print("🎯 Pipeline completed successfully.")
